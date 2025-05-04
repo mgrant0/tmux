@@ -379,6 +379,38 @@ style_add(struct grid_cell *gc, struct options *oo, const char *name,
 		format_free(ft0);
 }
 
+void
+style_add_array(struct grid_cell *gc, struct options *oo, const char *name,
+    struct format_tree *ft)
+{
+	struct style		*sy;
+	struct format_tree	*ft0 = NULL;
+	struct options_entry	*o;
+	union options_value	*ov;
+
+	/* Per line status-style override */
+	o = options_get(s->options, name);
+	ov = options_array_get(sls, i);
+	if (ov != NULL) {
+
+	if (ft == NULL)
+		ft = ft0 = format_create(NULL, NULL, 0, FORMAT_NOJOBS);
+
+	sy = options_string_to_style(oo, name, ft);
+	if (sy == NULL)
+		sy = &style_default;
+	if (sy->gc.fg != 8)
+		gc->fg = sy->gc.fg;
+	if (sy->gc.bg != 8)
+		gc->bg = sy->gc.bg;
+	if (sy->gc.us != 8)
+		gc->us = sy->gc.us;
+	gc->attr |= sy->gc.attr;
+
+	if (ft0 != NULL)
+		format_free(ft0);
+}
+
 /* Apply a style on top of the default style. */
 void
 style_apply(struct grid_cell *gc, struct options *oo, const char *name,

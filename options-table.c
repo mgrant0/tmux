@@ -108,6 +108,8 @@ static const char *options_table_allow_passthrough_list[] = {
 
 /* Status line format. */
 #define OPTIONS_TABLE_STATUS_FORMAT1 \
+	"#[#{E:status-line-style[0]}]" \
+	"#[push-default]" \
 	"#[align=left range=left #{E:status-left-style}]" \
 	"#[push-default]" \
 	"#{T;=/#{status-left-length}:status-left}" \
@@ -173,6 +175,8 @@ static const char *options_table_allow_passthrough_list[] = {
 	"#[pop-default]" \
 	"#[norange default]"
 #define OPTIONS_TABLE_STATUS_FORMAT2 \
+	"#[norange #{E:status-line-style[1]}]" \
+	"#[push-default]" \
 	"#{?#{>:#{status},2}," \
 	    "#[align=left acs] x  #[noacs]," \
 	    "#[align=left acs]    #[noacs]" \
@@ -180,6 +184,8 @@ static const char *options_table_allow_passthrough_list[] = {
 	"#[align=centre]#{P:#{?pane_active,#[reverse],}" \
 	"#{pane_index}[#{pane_width}x#{pane_height}]#[default] }"
 #define OPTIONS_TABLE_STATUS_FORMAT3 \
+	"#[#{E:status-line-style[2]}]" \
+	"#[push-default]" \
     "#[align=left acs] m> #[noacs]" \
     "#[norange default]" \
     "#[list=on align=#{status-justify}]"		      \
@@ -209,6 +215,9 @@ static const char *options_table_allow_passthrough_list[] = {
     "#{pane_index}[#{pane_width}x#{pane_height}]#[default] }"
 static const char *options_table_status_format_default[] = {
 	OPTIONS_TABLE_STATUS_FORMAT1, OPTIONS_TABLE_STATUS_FORMAT2, OPTIONS_TABLE_STATUS_FORMAT3, NULL
+};
+static const char *options_table_status_line_style_default[] = {
+	"default","default","default","default","default","default",NULL
 };
 
 /* Helpers for hook options. */
@@ -848,6 +857,15 @@ const struct options_table_entry options_table[] = {
 	  .flags = OPTIONS_TABLE_IS_STYLE,
 	  .separator = ",",
 	  .text = "Style of the left side of the status line."
+	},
+
+	{ .name = "status-line-style",
+	  .type = OPTIONS_TABLE_STRING,
+	  .scope = OPTIONS_TABLE_SESSION,
+	  .flags = OPTIONS_TABLE_IS_ARRAY,
+	  .default_arr = options_table_status_line_style_default,
+	  .text = "Styles for the status lines that override status-style. "
+		  "Each array member is the style for one status line. "
 	},
 
 	{ .name = "status-position",

@@ -375,7 +375,7 @@ status_redraw(struct client *c)
 	struct grid_cell		 gc;
 	u_int				 lines, i, n, width = c->tty.sx;
 	int				 flags, force = 0, changed = 0, fg, bg;
-	struct options_entry		*o;
+	struct options_entry		*o, *sls;
 	union options_value		*ov;
 	struct format_tree		*ft;
 	char				*expanded;
@@ -419,6 +419,9 @@ status_redraw(struct client *c)
 	}
 	screen_write_start(&ctx, &sl->screen);
 
+	/* Per line status-style override */
+	sls = options_get(s->options, "status-line-style");
+
 	/* Write the status lines. */
 	o = options_get(s->options, "status-format");
 	if (o == NULL) {
@@ -426,6 +429,16 @@ status_redraw(struct client *c)
 			screen_write_putc(&ctx, &gc, ' ');
 	} else {
 		for (i = 0; i < lines; i++) {
+
+			ov = options_array_get(sls, i);
+			if (ov != NULL) {
+				style_add(&gc, s->options, "status-line-style[0]", ft);
+				if (!grid_cells_equal(&gc, &sl->style)) {
+					force = 1;
+					memcpy(&sl->style, &gc, sizeof sl->style);
+				}
+			}
+
 			screen_write_cursormove(&ctx, 0, i, 0);
 
 			ov = options_array_get(o, i);

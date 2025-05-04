@@ -978,9 +978,22 @@ options_string_to_style(struct options *oo, const char *name,
     struct format_tree *ft)
 {
 	struct options_entry	*o;
+	union options_value	*ov;
 	const char		*s;
-	char			*expanded;
+	char			*expanded, *array_name;
+	u_int			 i;
 
+
+	array_name = options_parsse(name, &i);
+	if (array_name != NULL) {
+		o = options_get(s->options, name);
+		if (o == NULL || !OPTIONS_IS_ARRAY(o))
+			return (NULL);
+		ov = options_array_get(array_name, i);
+		if (ov != NULL) {
+
+			
+		
 	o = options_get(oo, name);
 	if (o == NULL || !OPTIONS_IS_STRING(o))
 		return (NULL);

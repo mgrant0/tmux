@@ -591,7 +591,7 @@ server_client_check_mouse_in_pane(struct window_pane *wp, u_int px, u_int py,
 	struct options		*wo = w->options;
 	struct window_pane	*fwp;
 	int			 pane_status, sb, sb_pos, sb_w, sb_pad;
-	u_int			 line, sl_top, sl_bottom;
+	u_int			 line = -1, sl_top, sl_bottom;
 
 	sb = options_get_number(wo, "pane-scrollbars");
 	sb_pos = options_get_number(wo, "pane-scrollbars-position");

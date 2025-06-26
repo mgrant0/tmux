@@ -1,4 +1,4 @@
-/*	$OpenBSD: imsg-buffer.c,v 1.35 2025/06/04 09:06:56 claudio Exp $	*/
+/*	$OpenBSD: imsg-buffer.c,v 1.31 2024/11/26 13:57:31 claudio Exp $	*/
 
 /*
  * Copyright (c) 2023 Claudio Jeker <claudio@openbsd.org>
@@ -45,14 +45,10 @@
 #undef be64toh
 #define be64toh ntohll
 
-struct ibufqueue {
-	TAILQ_HEAD(, ibuf)	bufs;
-	uint32_t		queued;
-};
-
 struct msgbuf {
-	struct ibufqueue	 bufs;
-	struct ibufqueue	 rbufs;
+	TAILQ_HEAD(, ibuf)	 bufs;
+	TAILQ_HEAD(, ibuf)	 rbufs;
+	uint32_t		 queued;
 	char			*rbuf;
 	struct ibuf		*rpmsg;
 	struct ibuf		*(*readhdr)(struct ibuf *, void *, int *);
@@ -61,8 +57,10 @@ struct msgbuf {
 	size_t			 hdrsize;
 };
 
+static void	msgbuf_read_enqueue(struct msgbuf *, struct ibuf *);
+static void	msgbuf_enqueue(struct msgbuf *, struct ibuf *);
+static void	msgbuf_dequeue(struct msgbuf *, struct ibuf *);
 static void	msgbuf_drain(struct msgbuf *, size_t);
-static void	ibufq_init(struct ibufqueue *);
 
 #define	IBUF_FD_MARK_ON_STACK	-2
 
@@ -150,9 +148,6 @@ int
 ibuf_add(struct ibuf *buf, const void *data, size_t len)
 {
 	void *b;
-
-	if (len == 0)
-		return (0);
 
 	if ((b = ibuf_reserve(buf, len)) == NULL)
 		return (-1);
@@ -250,31 +245,9 @@ ibuf_add_zero(struct ibuf *buf, size_t len)
 {
 	void *b;
 
-	if (len == 0)
-		return (0);
-
 	if ((b = ibuf_reserve(buf, len)) == NULL)
 		return (-1);
 	memset(b, 0, len);
-	return (0);
-}
-
-int
-ibuf_add_strbuf(struct ibuf *buf, const char *str, size_t len)
-{
-	char *b;
-	size_t n;
-
-	if ((b = ibuf_reserve(buf, len)) == NULL)
-		return (-1);
-
-	n = strlcpy(b, str, len);
-	if (n >= len) {
-		/* also covers the case where len == 0 */
-		errno = EOVERFLOW;
-		return (-1);
-	}
-	memset(b + n, 0, len - n);
 	return (0);
 }
 
@@ -299,8 +272,6 @@ ibuf_set(struct ibuf *buf, size_t pos, const void *data, size_t len)
 	if ((b = ibuf_seek(buf, pos, len)) == NULL)
 		return (-1);
 
-	if (len == 0)
-		return (0);
 	memcpy(b, data, len);
 	return (0);
 }
@@ -383,22 +354,6 @@ ibuf_set_h64(struct ibuf *buf, size_t pos, uint64_t value)
 	return (ibuf_set(buf, pos, &value, sizeof(value)));
 }
 
-int
-ibuf_set_maxsize(struct ibuf *buf, size_t max)
-{
-	if (buf->fd == IBUF_FD_MARK_ON_STACK) {
-		/* can't fiddle with stack buffers */
-		errno = EINVAL;
-		return (-1);
-	}
-	if (max > buf->max) {
-		errno = ERANGE;
-		return (-1);
-	}
-	buf->max = max;
-	return (0);
-}
-
 void *
 ibuf_data(const struct ibuf *buf)
 {
@@ -444,7 +399,7 @@ ibuf_rewind(struct ibuf *buf)
 void
 ibuf_close(struct msgbuf *msgbuf, struct ibuf *buf)
 {
-	ibufq_push(&msgbuf->bufs, buf);
+	msgbuf_enqueue(msgbuf, buf);
 }
 
 void
@@ -560,24 +515,6 @@ ibuf_get_string(struct ibuf *buf, size_t len)
 }
 
 int
-ibuf_get_strbuf(struct ibuf *buf, char *str, size_t len)
-{
-	if (len == 0) {
-		errno = EINVAL;
-		return (-1);
-	}
-
-	if (ibuf_get(buf, str, len) == -1)
-		return -1;
-	if (str[len - 1] != '\0') {
-		str[len - 1] = '\0';
-		errno = EOVERFLOW;
-		return -1;
-	}
-	return 0;
-}
-
-int
 ibuf_skip(struct ibuf *buf, size_t len)
 {
 	if (ibuf_size(buf) < len) {
@@ -592,8 +529,6 @@ ibuf_skip(struct ibuf *buf, size_t len)
 void
 ibuf_free(struct ibuf *buf)
 {
-	int save_errno = errno;
-
 	if (buf == NULL)
 		return;
 	/* if buf lives on the stack abort before causing more harm */
@@ -603,7 +538,6 @@ ibuf_free(struct ibuf *buf)
 		close(buf->fd);
 	freezero(buf->buf, buf->size);
 	free(buf);
-	errno = save_errno;
 }
 
 int
@@ -645,8 +579,9 @@ msgbuf_new(void)
 
 	if ((msgbuf = calloc(1, sizeof(*msgbuf))) == NULL)
 		return (NULL);
-	ibufq_init(&msgbuf->bufs);
-	ibufq_init(&msgbuf->rbufs);
+	msgbuf->queued = 0;
+	TAILQ_INIT(&msgbuf->bufs);
+	TAILQ_INIT(&msgbuf->rbufs);
 
 	return msgbuf;
 }
@@ -693,7 +628,7 @@ msgbuf_free(struct msgbuf *msgbuf)
 uint32_t
 msgbuf_queuelen(struct msgbuf *msgbuf)
 {
-	return ibufq_queuelen(&msgbuf->bufs);
+	return (msgbuf->queued);
 }
 
 void
@@ -702,10 +637,15 @@ msgbuf_clear(struct msgbuf *msgbuf)
 	struct ibuf	*buf;
 
 	/* write side */
-	ibufq_flush(&msgbuf->bufs);
+	while ((buf = TAILQ_FIRST(&msgbuf->bufs)) != NULL)
+		msgbuf_dequeue(msgbuf, buf);
+	msgbuf->queued = 0;
 
 	/* read side */
-	ibufq_flush(&msgbuf->rbufs);
+	while ((buf = TAILQ_FIRST(&msgbuf->rbufs)) != NULL) {
+		TAILQ_REMOVE(&msgbuf->rbufs, buf, entry);
+		ibuf_free(buf);
+	}
 	msgbuf->roff = 0;
 	ibuf_free(msgbuf->rpmsg);
 	msgbuf->rpmsg = NULL;
@@ -714,13 +654,11 @@ msgbuf_clear(struct msgbuf *msgbuf)
 struct ibuf *
 msgbuf_get(struct msgbuf *msgbuf)
 {
-	return ibufq_pop(&msgbuf->rbufs);
-}
+	struct ibuf	*buf;
 
-void
-msgbuf_concat(struct msgbuf *msgbuf, struct ibufqueue *from)
-{
-	ibufq_concat(&msgbuf->bufs, from);
+	if ((buf = TAILQ_FIRST(&msgbuf->rbufs)) != NULL)
+		TAILQ_REMOVE(&msgbuf->rbufs, buf, entry);
+	return buf;
 }
 
 int
@@ -732,7 +670,7 @@ ibuf_write(int fd, struct msgbuf *msgbuf)
 	ssize_t	n;
 
 	memset(&iov, 0, sizeof(iov));
-	TAILQ_FOREACH(buf, &msgbuf->bufs.bufs, entry) {
+	TAILQ_FOREACH(buf, &msgbuf->bufs, entry) {
 		if (i >= IOV_MAX)
 			break;
 		iov[i].iov_base = ibuf_data(buf);
@@ -773,7 +711,7 @@ msgbuf_write(int fd, struct msgbuf *msgbuf)
 	memset(&iov, 0, sizeof(iov));
 	memset(&msg, 0, sizeof(msg));
 	memset(&cmsgbuf, 0, sizeof(cmsgbuf));
-	TAILQ_FOREACH(buf, &msgbuf->bufs.bufs, entry) {
+	TAILQ_FOREACH(buf, &msgbuf->bufs, entry) {
 		if (i >= IOV_MAX)
 			break;
 		if (i > 0 && buf->fd != -1)
@@ -856,7 +794,7 @@ ibuf_read_process(struct msgbuf *msgbuf, int fd)
 			goto fail;
 
 		if (ibuf_left(msgbuf->rpmsg) == 0) {
-			ibufq_push(&msgbuf->rbufs, msgbuf->rpmsg);
+			msgbuf_read_enqueue(msgbuf, msgbuf->rpmsg);
 			msgbuf->rpmsg = NULL;
 		}
 	} while (ibuf_size(&rbuf) > 0);
@@ -985,94 +923,46 @@ again:
 }
 
 static void
-msgbuf_drain(struct msgbuf *msgbuf, size_t n)
-{
-	struct ibuf	*buf;
-
-	while ((buf = TAILQ_FIRST(&msgbuf->bufs.bufs)) != NULL) {
-		if (n >= ibuf_size(buf)) {
-			n -= ibuf_size(buf);
-			TAILQ_REMOVE(&msgbuf->bufs.bufs, buf, entry);
-			msgbuf->bufs.queued--;
-			ibuf_free(buf);
-		} else {
-			buf->rpos += n;
-			return;
-		}
-	}
-}
-
-static void
-ibufq_init(struct ibufqueue *bufq)
-{
-	TAILQ_INIT(&bufq->bufs);
-	bufq->queued = 0;
-}
-
-struct ibufqueue *
-ibufq_new(void)
-{
-	struct ibufqueue *bufq;
-
-	if ((bufq = calloc(1, sizeof(*bufq))) == NULL)
-		return NULL;
-	ibufq_init(bufq);
-	return bufq;
-}
-
-void
-ibufq_free(struct ibufqueue *bufq)
-{
-	if (bufq == NULL)
-		return;
-	ibufq_flush(bufq);
-	free(bufq);
-}
-
-struct ibuf *
-ibufq_pop(struct ibufqueue *bufq)
-{
-	struct ibuf *buf;
-
-	if ((buf = TAILQ_FIRST(&bufq->bufs)) == NULL)
-		return NULL;
-	TAILQ_REMOVE(&bufq->bufs, buf, entry);
-	bufq->queued--;
-	return buf;
-}
-
-void
-ibufq_push(struct ibufqueue *bufq, struct ibuf *buf)
+msgbuf_read_enqueue(struct msgbuf *msgbuf, struct ibuf *buf)
 {
 	/* if buf lives on the stack abort before causing more harm */
 	if (buf->fd == IBUF_FD_MARK_ON_STACK)
 		abort();
-	TAILQ_INSERT_TAIL(&bufq->bufs, buf, entry);
-	bufq->queued++;
+	TAILQ_INSERT_TAIL(&msgbuf->rbufs, buf, entry);
 }
 
-uint32_t
-ibufq_queuelen(struct ibufqueue *bufq)
+static void
+msgbuf_enqueue(struct msgbuf *msgbuf, struct ibuf *buf)
 {
-	return (bufq->queued);
+	/* if buf lives on the stack abort before causing more harm */
+	if (buf->fd == IBUF_FD_MARK_ON_STACK)
+		abort();
+	TAILQ_INSERT_TAIL(&msgbuf->bufs, buf, entry);
+	msgbuf->queued++;
 }
 
-void
-ibufq_concat(struct ibufqueue *to, struct ibufqueue *from)
+static void
+msgbuf_dequeue(struct msgbuf *msgbuf, struct ibuf *buf)
 {
-	to->queued += from->queued;
-	TAILQ_CONCAT(&to->bufs, &from->bufs, entry);
-	from->queued = 0;
+	TAILQ_REMOVE(&msgbuf->bufs, buf, entry);
+	msgbuf->queued--;
+	ibuf_free(buf);
 }
 
-void
-ibufq_flush(struct ibufqueue *bufq)
+static void
+msgbuf_drain(struct msgbuf *msgbuf, size_t n)
 {
-	struct ibuf *buf;
+	struct ibuf	*buf, *next;
 
-	while ((buf = TAILQ_FIRST(&bufq->bufs)) != NULL) {
-		TAILQ_REMOVE(&bufq->bufs, buf, entry);
-		ibuf_free(buf);
+	for (buf = TAILQ_FIRST(&msgbuf->bufs); buf != NULL && n > 0;
+	    buf = next) {
+		next = TAILQ_NEXT(buf, entry);
+		if (n >= ibuf_size(buf)) {
+			n -= ibuf_size(buf);
+			msgbuf_dequeue(msgbuf, buf);
+		} else {
+			buf->rpos += n;
+			n = 0;
+		}
 	}
-	bufq->queued = 0;
 }

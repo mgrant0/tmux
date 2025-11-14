@@ -175,11 +175,9 @@ server_lock_client(struct client *c)
 }
 
 void
-server_kill_pane(struct window_pane *wp)
+server_kill_pane(struct window_pane *wp, struct window *w)
 {
-	struct window	*w = wp->window;
-
-	if (window_count_panes(w) == 1) {
+	if (wp==NULL || window_count_panes(w) == 1) {
 		server_kill_window(w, 1);
 		recalculate_sizes();
 	} else {
@@ -309,7 +307,7 @@ server_destroy_pane(struct window_pane *wp, int notify)
 	struct window		*w = wp->window;
 	struct screen_write_ctx	 ctx;
 	struct grid_cell	 gc;
-	int			 remain_on_exit;
+	int			 remain_on_exit, empty_windows;
 	const char		*s;
 	char			*expanded;
 	u_int			 sx = screen_size_x(&wp->base);
@@ -372,8 +370,8 @@ server_destroy_pane(struct window_pane *wp, int notify)
 	server_client_remove_pane(wp);
 	layout_close_pane(wp);
 	window_remove_pane(w, wp);
-
-	if (TAILQ_EMPTY(&w->panes))
+	empty_windows = options_get_number(global_options, "empty-windows");
+	if (! empty_windows && TAILQ_EMPTY(&w->panes))
 		server_kill_window(w, 1);
 	else
 		server_redraw_window(w);

@@ -1188,7 +1188,7 @@ window_tree_kill_each(__unused void *modedata, void *itemdata,
 		break;
 	case WINDOW_TREE_PANE:
 		if (wp != NULL)
-			server_kill_pane(wp);
+			server_kill_pane(wp, wl->window);
 		break;
 	}
 }

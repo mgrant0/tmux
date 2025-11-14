@@ -229,6 +229,9 @@ server_start(struct tmuxproc *client, uint64_t flags, struct event_base *base,
 	else
 		options_set_number(global_options, "exit-empty", 0);
 
+	if (flags & CLIENT_EMPTY_WINDOWS)
+		options_set_number(global_options, "empty-windows", 1);
+
 	if (lockfd >= 0) {
 		unlink(lockfile);
 		free(lockfile);

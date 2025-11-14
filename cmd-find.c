@@ -725,9 +725,18 @@ cmd_find_from_session(struct cmd_find_state *fs, struct session *s, int flags)
 	cmd_find_clear_state(fs, flags);
 
 	fs->s = s;
-	fs->wl = fs->s->curw;
-	fs->w = fs->wl->window;
-	fs->wp = fs->w->active;
+	if (s->curw != NULL) {
+		fs->wl = fs->s->curw;
+		fs->w = fs->wl->window;
+		fs->wp = fs->w->active;
+		fs->idx = fs->wl->idx;
+	} else {
+		/* No window yet in this session */
+		fs->wl = NULL;
+		fs->w = NULL;
+		fs->wp = NULL;
+		fs->idx = -1;
+	}
 
 	cmd_find_log_state(__func__, fs);
 }
@@ -825,13 +834,23 @@ cmd_find_from_nothing(struct cmd_find_state *fs, int flags)
 		cmd_find_clear_state(fs, flags);
 		return (-1);
 	}
-	fs->wl = fs->s->curw;
-	fs->idx = fs->wl->idx;
-	fs->w = fs->wl->window;
-	fs->wp = fs->w->active;
 
-	cmd_find_log_state(__func__, fs);
-	return (0);
+	/* If there is a current winlink, use it; otherwise leave window/pane NULL */
+	if (fs->s->curw != NULL) {
+		fs->wl = fs->s->curw;
+		fs->idx = fs->wl->idx;
+		fs->w = fs->wl->window;
+		fs->wp = fs->w->active; /* may still be NULL if no panes in window */
+	} else {
+		fs->wl = NULL;
+		fs->idx = -1;
+		fs->w = NULL;
+		fs->wp = NULL;
+}
+
+cmd_find_log_state(__func__, fs);
+return (0);
+
 }
 
 /* Find state from mouse. */
@@ -983,8 +1002,19 @@ cmd_find_target(struct cmd_find_state *fs, struct cmdq_item *item,
 			cmdq_error(item, "no current target");
 		goto error;
 	}
-	if (!cmd_find_valid_state(fs->current))
-		fatalx("invalid current find state");
+
+	if (!cmd_find_valid_state(fs->current)) {
+		log_debug("%s: current find state invalid, attempting fallback to nothing", __func__);
+		cmd_find_clear_state(&current, flags);
+		if (cmd_find_from_nothing(&current, flags) == 0) {
+			fs->current = &current;
+			log_debug("%s: current is from nothing (fallback)", __func__);
+		} else {
+			if (~flags & CMD_FIND_QUIET)
+				cmdq_error(item, "no current target");
+			goto error;
+		}
+	}
 
 	/* An empty or NULL target is the current. */
 	if (target == NULL || *target == '\0')

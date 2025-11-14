@@ -1999,6 +1999,7 @@ struct client {
 #define CLIENT_ASSUMEPASTING 0x2000000000ULL
 #define CLIENT_REDRAWSCROLLBARS 0x4000000000ULL
 #define CLIENT_NO_DETACH_ON_DESTROY 0x8000000000ULL
+#define CLIENT_EMPTY_WINDOWS 0x10000000000ULL
 #define CLIENT_ALLREDRAWFLAGS		\
 	(CLIENT_REDRAWWINDOW|		\
 	 CLIENT_REDRAWSTATUS|		\
@@ -2922,7 +2923,7 @@ void	 server_status_window(struct window *);
 void	 server_lock(void);
 void	 server_lock_session(struct session *);
 void	 server_lock_client(struct client *);
-void	 server_kill_pane(struct window_pane *);
+void	 server_kill_pane(struct window_pane *, struct window *);
 void	 server_kill_window(struct window *, int);
 void	 server_renumber_session(struct session *);
 void	 server_renumber_all(void);

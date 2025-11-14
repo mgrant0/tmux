@@ -80,7 +80,7 @@ spawn_window(struct spawn_context *sc, char **cause)
 	struct window		*w;
 	struct window_pane	*wp;
 	struct winlink		*wl;
-	int			 idx = sc->idx;
+	int			 idx = sc->idx, empty_windows;
 	u_int			 sx, sy, xpixel, ypixel;
 
 	spawn_log(__func__, sc);
@@ -168,12 +168,15 @@ spawn_window(struct spawn_context *sc, char **cause)
 		w = NULL;
 	sc->flags |= SPAWN_NONOTIFY;
 
-	/* Spawn the pane. */
-	wp = spawn_pane(sc, cause);
-	if (wp == NULL) {
-		if (~sc->flags & SPAWN_RESPAWN)
-			winlink_remove(&s->windows, sc->wl);
-		return (NULL);
+	/* Do not Spawn the pane if -e flag given. */
+	empty_windows = options_get_number(global_options, "empty-windows");
+	if (!empty_windows) {
+		wp = spawn_pane(sc, cause);
+		if (wp == NULL) {
+			if (~sc->flags & SPAWN_RESPAWN)
+				winlink_remove(&s->windows, sc->wl);
+			return (NULL);
+		}
 	}
 
 	/* Set the name of the new window. */

@@ -379,7 +379,7 @@ main(int argc, char **argv)
 		environ_set(global_environ, "PWD", 0, "%s", cwd);
 	expand_paths(TMUX_CONF, &cfg_files, &cfg_nfiles, 1);
 
-	while ((opt = getopt(argc, argv, "2c:CDdf:hlL:NqS:T:uUvV")) != -1) {
+	while ((opt = getopt(argc, argv, "2c:CDdef:hlL:NqS:T:uUvV")) != -1) {
 		switch (opt) {
 		case '2':
 			tty_add_features(&feat, "256", ":,");
@@ -395,6 +395,9 @@ main(int argc, char **argv)
 				flags |= CLIENT_CONTROLCONTROL;
 			else
 				flags |= CLIENT_CONTROL;
+			break;
+		case 'e':
+			flags |= CLIENT_EMPTY_WINDOWS;
 			break;
 		case 'f':
 			if (!fflag) {

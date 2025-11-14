@@ -356,6 +356,14 @@ const struct options_table_entry options_table[] = {
 	  .text = "Editor run to edit files."
 	},
 
+	{ .name = "empty-windows",
+	  .type = OPTIONS_TABLE_FLAG,
+	  .scope = OPTIONS_TABLE_SERVER,
+	  .default_num = 0,
+	  .text = "Whether the server should create a new pane when a window"
+		  "is created and exit when there are no more panes."
+	},
+
 	{ .name = "escape-time",
 	  .type = OPTIONS_TABLE_NUMBER,
 	  .scope = OPTIONS_TABLE_SERVER,

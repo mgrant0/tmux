@@ -197,6 +197,8 @@ cmd_new_pane_exec(struct cmd *self, struct cmdq_item *item)
 		environ_free(sc.environ);
 		return (CMD_RETURN_ERROR);
 	}
+	if (wp == NULL)
+		wp = new_wp;
 	if (input) {
 		switch (window_pane_start_input(new_wp, item, &cause)) {
 		case -1:

@@ -62,6 +62,6 @@ cmd_kill_pane_exec(struct cmd *self, struct cmdq_item *item)
 		return (CMD_RETURN_NORMAL);
 	}
 
-	server_kill_pane(wp);
+	server_kill_pane(wp, wl->window);
 	return (CMD_RETURN_NORMAL);
 }

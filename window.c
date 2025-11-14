@@ -1150,7 +1150,13 @@ window_pane_set_mode(struct window_pane *wp, struct window_pane *swp,
     struct args *args)
 {
 	struct window_mode_entry	*wme;
-	struct window			*w = wp->window;
+	struct window			*w;
+
+	if (wp == NULL) {
+		wp = window_temp_pane (fs->s);
+	}
+
+	w = wp->window;
 
 	if (!TAILQ_EMPTY(&wp->modes) && TAILQ_FIRST(&wp->modes)->mode == mode)
 		return (1);
@@ -2007,3 +2013,19 @@ window_pane_send_theme_update(struct window_pane *wp)
 
 	wp->flags &= ~PANE_THEMECHANGED;
 }
+
+/* If there are no panes (empty_window option), use this to create a temp pane. */
+struct window_pane *
+window_temp_pane (struct session *s)
+{
+	int			 hlimit;
+	struct window_pane	*wp;
+
+	hlimit = options_get_number(s->options, "history-limit");
+	wp = window_add_pane(s->curw->window, NULL, hlimit, PANE_EMPTY);
+	wp->flags |= PANE_TMP|PANE_EXITED;
+	window_set_active_pane(s->curw->window, wp, 1);
+
+	return (wp);
+}
+

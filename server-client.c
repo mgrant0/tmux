@@ -3924,7 +3924,6 @@ server_client_print(struct client *c, int parse, struct evbuffer *evb)
 	struct window_pane		*wp;
 	struct window_mode_entry	*wme;
 	char				*sanitized, *msg, *line, empty = '\0';
-	int				 hlimit;
 
 	if (!parse) {
 		utf8_stravisx(&msg, data, size,
@@ -3961,13 +3960,8 @@ server_client_print(struct client *c, int parse, struct evbuffer *evb)
 	}
 
 	wp = server_client_get_pane(c);
-	if (wp == NULL) {
-		/* If there are no panes (empty_window option), then create a temp pane. */
-		hlimit = options_get_number(c->session->options, "history-limit");
-		wp = window_add_pane(c->session->curw->window, NULL, hlimit, PANE_EMPTY);
-		wp->flags |= PANE_TMP|PANE_EXITED;
-		window_set_active_pane(c->session->curw->window, wp, 1);
-	}
+	if (wp == NULL)
+		window_temp_pane(c->session);
 	wme = TAILQ_FIRST(&wp->modes);
 	if (wme == NULL || wme->mode != &window_view_mode)
 		window_pane_set_mode(wp, NULL, &window_view_mode, NULL, NULL);

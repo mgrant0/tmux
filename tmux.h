@@ -3336,6 +3336,7 @@ int		 window_pane_get_bg_control_client(struct window_pane *);
 int		 window_get_bg_client(struct window_pane *);
 enum client_theme window_pane_get_theme(struct window_pane *);
 void		 window_pane_send_theme_update(struct window_pane *);
+struct window_pane *window_temp_pane (struct session *);
 
 /* layout.c */
 u_int		 layout_count_cells(struct layout_cell *);

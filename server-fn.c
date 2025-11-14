@@ -177,7 +177,10 @@ server_lock_client(struct client *c)
 void
 server_kill_pane(struct window_pane *wp, struct window *w)
 {
-	if (wp==NULL || window_count_panes(w) == 1) {
+	int empty_windows = options_get_number(global_options, "empty-windows");
+
+	if (wp==NULL ||
+	    (window_count_panes(w) == 1 && ! empty_windows)) {
 		server_kill_window(w, 1);
 		recalculate_sizes();
 	} else {

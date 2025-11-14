@@ -400,7 +400,7 @@ key_bindings_init(void)
 		"bind -N 'Choose a session from a list' s { choose-tree -Zs }",
 		"bind -N 'Show a clock' t { clock-mode }",
 		"bind -N 'Choose a window from a list' w { choose-tree -Zw }",
-		"bind -N 'Kill the active pane' x { confirm-before -p\"kill-pane #P? (y/n)\" kill-pane }",
+		"bind -N 'Kill the active pane' x { confirm-before -p\"#{?#{>=:#{window_panes},1},kill-pane #P?,close-window?}\" kill-pane }",
 		"bind -N 'Zoom the active pane' z { resize-pane -Z }",
 		"bind -N 'Swap the active pane with the pane above' '{' { swap-pane -U }",
 		"bind -N 'Swap the active pane with the pane below' '}' { swap-pane -D }",

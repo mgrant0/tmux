@@ -1194,6 +1194,7 @@ struct window_pane {
 #define PANE_REDRAWSCROLLBAR 0x8000
 #define PANE_FLOATING 0x10000
 #define PANE_MINIMISED 0x20000
+#define PANE_TMP 0x40000
 
 	u_int		 sb_slider_y;
 	u_int		 sb_slider_h;

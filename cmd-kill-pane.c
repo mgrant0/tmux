@@ -56,12 +56,17 @@ cmd_kill_pane_exec(struct cmd *self, struct cmdq_item *item)
 				continue;
 			server_client_remove_pane(loopwp);
 			layout_close_pane(loopwp);
-			window_remove_pane(wl->window, loopwp);
+			if (~loopwp->flags & PANE_TMP)
+				window_remove_pane(wl->window, loopwp);
 		}
 		server_redraw_window(wl->window);
 		return (CMD_RETURN_NORMAL);
 	}
 
+	if (wp != NULL && wp->flags & PANE_TMP) {
+		cmdq_error(item, "can't a tmp pane");
+		return (CMD_RETURN_ERROR);
+	}
 	server_kill_pane(wp, wl->window);
 	return (CMD_RETURN_NORMAL);
 }

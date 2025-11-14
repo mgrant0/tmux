@@ -1202,6 +1202,14 @@ window_pane_reset_mode(struct window_pane *wp)
 		wp->flags &= ~PANE_UNSEENCHANGES;
 		log_debug("%s: no next mode", __func__);
 		wp->screen = &wp->base;
+
+		if (wp->flags & PANE_TMP) {
+			wp->flags &= ~PANE_TMP;
+			if (window_pane_destroy_ready(wp))
+				server_destroy_pane(wp, 1);
+			window_set_name(w, "");
+			return;
+		}
 	} else {
 		log_debug("%s: next mode is %s", __func__, next->mode->name);
 		wp->screen = next->screen;

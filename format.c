@@ -1997,7 +1997,7 @@ static void *
 format_cb_pane_dead(struct format_tree *ft)
 {
 	if (ft->wp != NULL) {
-		if (ft->wp->fd == -1)
+		if ((ft->wp->fd == -1) && (~ft->wp->flags & PANE_TMP))
 			return (xstrdup("1"));
 		return (xstrdup("0"));
 	}
